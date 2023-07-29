@@ -2,6 +2,8 @@ import torch
 import numpy as np
 
 
+sigmoid_func = torch.nn.Sigmoid()
+
 
 
 def basic_matrix(K, R, t):
@@ -43,12 +45,12 @@ def epipolar_line_distance(pj, l):
     """
     given a point j and epipolar line l, compute the distance between them
     """
-    pj_homogeneous = torch.cat((pj, torch.tensor([1], dtype=torch.float32)))
-    distance = torch.abs(torch.matmul(pj_homogeneous, l[:2]) + l[2]) / torch.norm(l[:2])
+    #pj_homogeneous = torch.cat((pj, torch.tensor([1], dtype=torch.float32)))
+    distance = torch.abs(torch.matmul(pj, l) / torch.norm(l[:2]))
     return distance
 
 
-def epipolar_weight_Mat(resolution, K, R, t):
+def epipolar_weight_Mat(resolution, K, R, t, threshold=0.7):
     """
     given feature map resolution, compute the epipolar weight matrix M
 
@@ -57,43 +59,72 @@ def epipolar_weight_Mat(resolution, K, R, t):
         R: relative camera rotation matrix
         t: relative camera translation matrix
         resolution: feature map resolution H * W
+        
     return: weight matrix M(HW * HW)
     """
-    F = basic_matrix(K, R, t)
-    H = resolution[0]
-    W = resolution[1]
-    weight_Mat = torch.zeros(resolution[0]*resolution[1], resolution[0]*resolution[1], dtype=torch.float32)
+    #version 1 
+    # F = basic_matrix(K, R, t)
+    # H = resolution[0]
+    # W = resolution[1]
+    # weight_Mat = torch.zeros(resolution[0]*resolution[1], resolution[0]*resolution[1], dtype=torch.float32)
     
-    for i in range(H * W):
-        for j in range(H * W):
-            # 计算点 i 和点 j 对应的像素坐标 (xi, yi) 和 (xj, yj)
-            xi, yi = i // W, i % W
-            xj, yj = j // W, j % W
+    # # TO be optimized
+    # for i in range(H * W):
+    #     for j in range(H * W):
+    #         # 计算点 i 和点 j 对应的像素坐标 (xi, yi) 和 (xj, yj)
+    #         xi, yi = i // W, i % W
+    #         xj, yj = j // W, j % W
             
-            # 构建点 i 和点 j 对应的齐次坐标
-            pi = torch.tensor([xi, yi, 1], dtype=torch.float32)
-            pj = torch.tensor([xj, yj, 1], dtype=torch.float32)
-            l = F @ pi
-            l_normalized = l / torch.norm(l[:2])
-            # 计算点 j 到极线 l 的距离
-            distance = epipolar_line_distance(pj, l_normalized)
-            # 存储距离到距离矩阵
-            weight_Mat[i, j] = distance
+    #         # 构建点 i 和点 j 对应的齐次坐标
+    #         pi = torch.tensor([xi, yi, 1], dtype=torch.float32)
+    #         pj = torch.tensor([xj, yj, 1], dtype=torch.float32)
+    #         l = F @ pi
+    #         l_normalized = l / torch.norm(l[:2])
+    #         # 计算点 j 到极线 l 的距离
+    #         distance = epipolar_line_distance(pj, l_normalized)
+    #         # 存储距离到距离矩阵
+    #         weight_Mat[i, j] = distance
             
-    return weight_Mat
+    # return weight_Mat
+
+    # version 2
+    F = basic_matrix(K, R, t)
+    H, W = resolution
+    
+    # Generate pixel coordinates
+    y, x = torch.meshgrid(torch.arange(H), torch.arange(W))
+    pixel_coordinates = torch.stack([y, x, torch.ones_like(x)], dim=2).view(-1, 3).float()  #pixel_cor(i,j, :)为[i, j, 1]
+    #print(pixel_coordinates.shape)
+    lines =  F@pixel_coordinates.t()        #[3, 128*128]
+    lines = lines / torch.norm(lines[:2], dim=0) 
+    
+    pixel_coordinates = pixel_coordinates.view(-1, W, 3)  #(128, 128, 3)
+    lines = lines.view(3, W, -1)     #(3, 128, 128), lines[:, i, j] = pij 对应的极线参数
+    pixel_coordinates_flat = pixel_coordinates.view(-1, 3).permute(1,0) #([3, 128*128])
+    lines_flat = lines.view(3, -1).permute(1,0) #(128*128, 3)
+    W_Mat = torch.abs(torch.matmul(lines_flat, pixel_coordinates_flat)) #[16384, 16384]
+    
+    W_Mat = 1. - sigmoid_func(50.0*(W_Mat- threshold))
+ 
+    
+    return W_Mat
+
+
+
 
 def epipolar_Affinity_Mat(key, query):
     """
         Args:
-            key: source view feature, shape: (batch_size, height, width)
+            key: source view feature, shape: (batch_size, channel, height, width)
             query : intermedia UNet feature, shape: (batch_size, channel, height, width)
         Returns:
             affinity_matrix: affinity matrix, shape: (batch_size, height * width, height * width)
     """
+    
     key_channel = key.shape[1]
     query_channel = query.shape[1]
-    key_flat = key.view(key.size(0), key_channel, -1)
-    query_flat = query.view(query.size(0), query_channel, -1)
+    key_flat = key.view(key.size(0), key_channel, -1)           # (batch_size, channel, height * width)
+    query_flat = query.view(query.size(0), query_channel, -1)   # (batch_size, channel, height * width)
     # 计算相似度得分,并归一化
     scores = torch.bmm(query_flat.transpose(1, 2), key_flat)
     softmax_func = torch.nn.Softmax(dim= -1)
