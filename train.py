@@ -1,20 +1,11 @@
 from models.epipolar_unet import *
-from models.epipolar_unet import *
-
 from models.unet import *
 from utils.script_util import *
 
-#MODEL_FLAGS="--attention_resolutions 32,16,8 --class_cond True --diffusion_steps 1000 --dropout 0.1 --image_size 64 --learn_sigma True --noise_schedule cosine --num_channels 192 
-from utils.dataset import *
 from PIL import Image
-import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
+
 import utils.logger as logger
 from utils.train_util import *
-
-# print(feature.shape)from utils.script_utils import *
 from utils.resample import *
 
 keys = {'image_size': 64, 'num_channels': 192, 
