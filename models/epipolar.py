@@ -13,7 +13,7 @@ def basic_matrix(K, R, t):
         R: camera rotation matrix
         t: camera translation matrix
     Returns:
-        M: camera projection matrix
+        F: basic matrix (3, 3)
     """
     #本质矩阵E = t cross R
     t_cross = torch.tensor([[0, -t[2], t[1]], [t[2], 0, -t[0]], [-t[1], t[0], 0]], dtype=torch.float32)
@@ -55,9 +55,9 @@ def epipolar_weight_Mat(resolution, K, R, t, threshold=0.7):
     given feature map resolution, compute the epipolar weight matrix M
 
     Args:
-        K: relative camera intrinsic matrix
-        R: relative camera rotation matrix
-        t: relative camera translation matrix
+        K: relative camera intrinsic matrix (3 * 3)
+        R: relative camera rotation matrix  (3 * 3)
+        t: relative camera translation matrix (3,)
         resolution: feature map resolution H * W
         
     return: weight matrix M(HW * HW)
@@ -105,28 +105,65 @@ def epipolar_weight_Mat(resolution, K, R, t, threshold=0.7):
     W_Mat = torch.abs(torch.matmul(lines_flat, pixel_coordinates_flat)) #[16384, 16384]
     
     W_Mat = 1. - sigmoid_func(50.0*(W_Mat- threshold))
- 
-    
     return W_Mat
-
-
-
 
 def epipolar_Affinity_Mat(key, query):
     """
         Args:
-            key: source view feature, shape: (batch_size, channel, height, width)
-            query : intermedia UNet feature, shape: (batch_size, channel, height, width)
+            key: source view feature, shape: (B, channel, height, width)
+            query : intermedia UNet feature, shape: (B, channel, height, width)
         Returns:
-            affinity_matrix: affinity matrix, shape: (batch_size, height * width, height * width)
+            affinity_matrix: affinity matrix, shape: (B, height * width, height * width)
     """
     
     key_channel = key.shape[1]
     query_channel = query.shape[1]
-    key_flat = key.view(key.size(0), key_channel, -1)           # (batch_size, channel, height * width)
-    query_flat = query.view(query.size(0), query_channel, -1)   # (batch_size, channel, height * width)
+    key_flat = key.view(key.size(0), key_channel, -1)           # (B, channel, height * width)
+    query_flat = query.view(query.size(0), query_channel, -1)   # (B, channel, height * width)
     # 计算相似度得分,并归一化
     scores = torch.bmm(query_flat.transpose(1, 2), key_flat)
     softmax_func = torch.nn.Softmax(dim= -1)
     affinity_matrix = softmax_func(scores)
     return affinity_matrix    
+
+
+def batch_epipolar_weight_Mat(resolution, K, R, t, threshold=0.7):
+    """
+    modified to take in batch inputs
+
+    Args:
+        K: relative camera intrinsic matrix (B, 3,  3)
+        R: relative camera rotation matrix  (B, 3,  3)
+        t: relative camera translation matrix (B, 3,)
+        resolution: feature map resolution H * W
+        
+    return: weight matrix M(HW * HW)
+    """
+    B = K.shape[0]
+    F = torch.zeros(B, 3, 3)
+
+    for i in range(B):
+        F[i] = basic_matrix(K[i], R[i], t[i])
+    
+    H, W = resolution
+    
+    # Generate pixel coordinates
+    y, x = torch.meshgrid(torch.arange(H), torch.arange(W))
+    pixel_coordinates = torch.stack([y, x, torch.ones_like(x)], dim=2).view(-1, 3).float()  #pixel_cor(i,j, :)为[i, j, 1]
+    
+    pixel_coordinates = pixel_coordinates.unsqueeze(0).repeat(B, 1, 1)  #(B, 128*128, 3)
+    cor_t = pixel_coordinates.permute(0, 2, 1)
+    
+    #print(pixel_coordinates.shape)
+    lines =  F@cor_t       #[B, 3, 128*128]
+
+    lines = lines / torch.norm(lines[:, :2, :], dim=1).unsqueeze(1)
+    
+    pixel_coordinates = pixel_coordinates.view(B, -1, W, 3)  #(128, 128, 3)
+    lines = lines.view(B, 3, W, -1)     #(B, 3, 128, 128), lines[:, i, j] = pij 对应的极线参数
+    pixel_coordinates_flat = pixel_coordinates.view(B, -1, 3).permute(0, 2, 1) #([B, 3, 128*128])
+    lines_flat = lines.view(B, 3, -1).permute(0, 2, 1) #(B, 128*128, 3)
+    W_Mat = torch.abs(torch.matmul(lines_flat, pixel_coordinates_flat)) #[B, 16384, 16384]
+    
+    W_Mat = 1. - sigmoid_func(50.0*(W_Mat- threshold))
+    return W_Mat

@@ -467,21 +467,25 @@ class pretrained_epipolar_Unet(UNetModel):
         # part2 = self.middle_block_layers[2:]
         
         
-    def forward(self, x, timesteps, f, Weight_Mat, y=None):
+    #def forward(self, x, timesteps, f, Weight_Mat, y=None):
+    def forward(self, x, timesteps, f, Weight_Mat):
         """
         Apply the model to an input batch.
-
+        Arglist = [timesteps, f, Weight_Mat]
+        
         :param x: an [N x C x ...] Tensor of inputs.
         :param timesteps: a 1-D batch of timesteps.
         :param y: an [N] Tensor of labels, if class-conditional.
         :param Weight_Mat: an [N x HW x HW] Tensor of weight matrix
-    
+        :param f: feature view embeddings
+        
         :return: an [N x C x ...] Tensor of outputs.
         """
         #assert (y is not None) == (
         #    self.num_classes is not None
         #), "must specify y if and only if the model is class-conditional"
-
+        #f, Weight_Mat = y['f'], y['Weight_Mat']
+        
         hs = []
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
 

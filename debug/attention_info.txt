@@ -1,0 +1,49 @@
+keys = {'image_size': 64, 'num_channels': 192, 
+            'num_res_blocks': 3, 'num_heads': 4, 'num_heads_upsample': -1, 
+            'num_head_channels': 64, 'attention_resolutions': '32,16,8', 'channel_mult': '', 'dropout': 0.1, 
+            'class_cond': True, 'use_checkpoint': False, 'use_scale_shift_norm': True, 'resblock_updown': True, 'use_fp16': False, 'use_new_attention_order': True, 'learn_sigma': True, 'diffusion_steps': 1000, 'noise_schedule': 'cosine', 'timestep_respacing': '250', 'use_kl': False, 'predict_xstart': 
+            False, 'rescale_timesteps': False, 'rescale_learned_sigmas': False}
+
+
+encoder 各个阶段的输出
+0 : torch.Size([1, 192, 64, 64]) len: 1
+1 : torch.Size([1, 192, 64, 64]) len: 1
+2 : torch.Size([1, 192, 64, 64]) len: 1
+3 : torch.Size([1, 192, 64, 64]) len: 1
+4 : torch.Size([1, 192, 32, 32]) len: 1
+5 : torch.Size([1, 384, 32, 32]) len: 2
+6 : torch.Size([1, 384, 32, 32]) len: 2
+7 : torch.Size([1, 384, 32, 32]) len: 2
+8 : torch.Size([1, 384, 16, 16]) len: 1
+9 : torch.Size([1, 576, 16, 16]) len: 2
+10 : torch.Size([1, 576, 16, 16]) len: 2
+11 : torch.Size([1, 576, 16, 16]) len: 2
+12 : torch.Size([1, 576, 8, 8]) len: 1
+13 : torch.Size([1, 768, 8, 8]) len: 2
+14 : torch.Size([1, 768, 8, 8]) len: 2
+15 : torch.Size([1, 768, 8, 8]) len: 2
+
+包括attention的层数：
+[5, 6, 7, 9, 10, 11, 13, 14, 15]
+
+
+decoder 各个阶段输出:
+0 : torch.Size([1, 768, 8, 8]) len: 2
+1 : torch.Size([1, 768, 8, 8]) len: 2
+2 : torch.Size([1, 768, 8, 8]) len: 2
+3 : torch.Size([1, 768, 16, 16]) len: 3
+4 : torch.Size([1, 576, 16, 16]) len: 2
+5 : torch.Size([1, 576, 16, 16]) len: 2
+6 : torch.Size([1, 576, 16, 16]) len: 2
+7 : torch.Size([1, 576, 32, 32]) len: 3
+8 : torch.Size([1, 384, 32, 32]) len: 2
+9 : torch.Size([1, 384, 32, 32]) len: 2
+10 : torch.Size([1, 384, 32, 32]) len: 2
+11 : torch.Size([1, 384, 64, 64]) len: 3
+12 : torch.Size([1, 192, 64, 64]) len: 1
+13 : torch.Size([1, 192, 64, 64]) len: 1
+14 : torch.Size([1, 192, 64, 64]) len: 1
+15 : torch.Size([1, 192, 64, 64]) len: 1
+
+包括attention的层数：
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
